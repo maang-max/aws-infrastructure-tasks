@@ -1,0 +1,83 @@
+name: Terramate Plan
+
+on:
+  pull_request:
+    branches: [ master ]
+    paths:
+      - 'terraform/**'
+      - '**.tm.hcl'
+      - '.github/workflows/terramate-plan.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  terramate-plan:
+    name: 'Terramate Plan'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+      
+      - name: Setup Terramate
+        uses: terramate-io/terramate-action@v1
+        with:
+          version: 0.13.0
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Terramate Login to Cloud
+        run: |
+          terramate cloud login --token ${{ secrets.TERRAMATE_CLOUD_TOKEN }}
+        env:
+          TM_CLOUD_ORGANIZATION: aws-infra-terraform
+      
+      - name: Terramate List Stacks
+        run: terramate list stacks
+      
+      - name: Terramate Plan
+        id: plan
+        run: |
+          terramate run --changed-git-refs="${{ github.event.pull_request.base.sha }}" \
+            --terramate-cloud-pr=${{ github.event.pull_request.number }} \
+            -- terraform init -input=false
+          
+          terramate run --changed-git-refs="${{ github.event.pull_request.base.sha }}" \
+            --terramate-cloud-pr=${{ github.event.pull_request.number }} \
+            -- terraform plan -input=false -no-color -out=tfplan
+        continue-on-error: true
+      
+      - name: Update Pull Request
+        uses: actions/github-script@v6
+        if: github.event_name == 'pull_request'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### Terramate Plan 📝
+            
+            *Terraform plan results are available in Terramate Cloud*
+            
+            [View in Terramate Cloud](https://cloud.terramate.io/organizations/aws-infra-terraform/pull-requests/${{ github.event.pull_request.number }})
+            
+            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
