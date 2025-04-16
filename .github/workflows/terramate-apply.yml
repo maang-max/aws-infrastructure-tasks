@@ -46,6 +46,7 @@ jobs:
           terramate cloud login --token ${{ secrets.TERRAMATE_CLOUD_TOKEN }}
         env:
           TM_CLOUD_ORGANIZATION: aws-infra-terraform
+          # The token should be added as a GitHub secret named TERRAMATE_CLOUD_TOKEN
       
       - name: Terramate List Stacks
         run: terramate list stacks
