@@ -8,7 +8,7 @@ terramate {
     }
     
     cloud {
-      organization = "aws-infra-terraform"
+      organization = "cloudas"
       # Uncomment and set the location if needed
       # location = "eu" # or "us"
     }
